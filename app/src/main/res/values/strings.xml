@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">発車ベルスイッチ</string>
+    <string name="settings">設定</string>
+    <string name="close">閉じる</string>
+    <string name="audio_file_management">音声ファイル管理</string>
+    <string name="departure_bell">発車ベル</string>
+    <string name="door_announcement">戸閉放送</string>
+    <string name="add_mp3_file">MP3ファイルを追加</string>
+    <string name="playback_hint">スイッチを押すと音声が再生されます</string>
+    <string name="select_audio">選択してください</string>
+    <string name="on_label">ON</string>
+    <string name="off_label">OFF</string>
+    <string name="delete">削除</string>
+</resources>
