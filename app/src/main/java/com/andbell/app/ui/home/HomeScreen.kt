@@ -50,12 +50,14 @@ fun HomeScreen(
     var addTargetCategory by remember { mutableStateOf(AudioCategory.DepartureBell) }
 
     val filePicker = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.OpenDocument(),
-    ) { uri ->
-        uri ?: return@rememberLauncherForActivityResult
-        context.contentResolver.persistReadPermission(uri)
-        val name = context.contentResolver.resolveDisplayName(uri) ?: "custom-${System.currentTimeMillis()}.mp3"
-        viewModel.onAddAudio(uri, name, addTargetCategory)
+        contract = ActivityResultContracts.OpenMultipleDocuments(),
+    ) { uris ->
+        if (uris.isEmpty()) return@rememberLauncherForActivityResult
+        uris.forEach { uri ->
+            context.contentResolver.persistReadPermission(uri)
+            val name = context.contentResolver.resolveDisplayName(uri) ?: "custom-${System.currentTimeMillis()}.mp3"
+            viewModel.onAddAudio(uri, name, addTargetCategory)
+        }
     }
 
     ObserveMessages(viewModel.messages, snackbarHostState)
