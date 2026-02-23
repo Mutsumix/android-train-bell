@@ -3,6 +3,7 @@ package com.andbell.app.ui.home.components
 import android.Manifest
 import android.content.Context
 import android.content.pm.PackageManager
+import android.media.MediaPlayer
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Canvas
@@ -17,15 +18,22 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Pause
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -53,32 +61,34 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
+private enum class Phase { Idle, Recording, Review }
+
 @Composable
 fun RecordingDialog(
     onDismiss: () -> Unit,
     onSaved: (file: File, displayName: String) -> Unit,
 ) {
     val context = LocalContext.current
-    var isRecording by remember { mutableStateOf(false) }
+
+    var phase by remember { mutableStateOf(Phase.Idle) }
     var elapsedSeconds by remember { mutableStateOf(0) }
     var amplitudes by remember { mutableStateOf(List(50) { 0f }) }
     var currentFile by remember { mutableStateOf<File?>(null) }
+    var recordedDuration by remember { mutableStateOf(0) }
+    var nameInput by remember { mutableStateOf("") }
+    var isPreviewPlaying by remember { mutableStateOf(false) }
+    var previewPlayer by remember { mutableStateOf<MediaPlayer?>(null) }
 
     val recorder = remember { AudioRecorder(context) }
-    DisposableEffect(Unit) {
-        onDispose { recorder.release() }
-    }
 
-    val permissionLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.RequestPermission(),
-    ) { isGranted ->
-        if (isGranted) {
-            val file = newRecordingFile(context)
-            currentFile = file
-            recorder.start(file)
-            isRecording = true
+    DisposableEffect(Unit) {
+        onDispose {
+            recorder.release()
+            previewPlayer?.release()
         }
     }
+
+    val isRecording = phase == Phase.Recording
 
     LaunchedEffect(isRecording) {
         if (isRecording) {
@@ -102,15 +112,68 @@ fun RecordingDialog(
         }
     }
 
-    Dialog(
-        onDismissRequest = {
-            if (isRecording) {
-                recorder.stop()
-                currentFile?.delete()
-            }
-            onDismiss()
-        },
-    ) {
+    val permissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission(),
+    ) { isGranted ->
+        if (isGranted) {
+            val file = newRecordingFile(context)
+            currentFile = file
+            recorder.start(file)
+            phase = Phase.Recording
+        }
+    }
+
+    fun startRecording() {
+        val granted = ContextCompat.checkSelfPermission(
+            context,
+            Manifest.permission.RECORD_AUDIO,
+        ) == PackageManager.PERMISSION_GRANTED
+        if (granted) {
+            val file = newRecordingFile(context)
+            currentFile = file
+            recorder.start(file)
+            phase = Phase.Recording
+        } else {
+            permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+        }
+    }
+
+    fun stopRecording() {
+        recorder.stop()
+        recordedDuration = elapsedSeconds
+        phase = Phase.Review
+    }
+
+    fun reRecord() {
+        previewPlayer?.release()
+        previewPlayer = null
+        isPreviewPlaying = false
+        currentFile?.delete()
+        currentFile = null
+        nameInput = ""
+        phase = Phase.Idle
+    }
+
+    fun save() {
+        val file = currentFile ?: return
+        val name = nameInput.trim().ifEmpty {
+            val fmt = SimpleDateFormat("MM/dd HH:mm", Locale.getDefault())
+            "録音 ${fmt.format(Date())}"
+        }
+        previewPlayer?.release()
+        previewPlayer = null
+        onSaved(file, name)
+    }
+
+    fun dismiss() {
+        if (phase == Phase.Recording) recorder.stop()
+        currentFile?.delete()
+        previewPlayer?.release()
+        previewPlayer = null
+        onDismiss()
+    }
+
+    Dialog(onDismissRequest = { dismiss() }) {
         Card(
             modifier = Modifier
                 .fillMaxWidth()
@@ -126,98 +189,154 @@ fun RecordingDialog(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Text(
-                        text = "音声を録音",
-                        style = MaterialTheme.typography.titleLarge,
-                    )
-                    IconButton(
-                        onClick = {
-                            if (isRecording) {
-                                recorder.stop()
-                                currentFile?.delete()
-                            }
-                            onDismiss()
-                        },
-                    ) {
+                    Text("音声を録音", style = MaterialTheme.typography.titleLarge)
+                    IconButton(onClick = { dismiss() }) {
                         Icon(Icons.Default.Close, contentDescription = "閉じる")
                     }
                 }
 
                 Spacer(Modifier.height(20.dp))
 
-                WaveformView(
-                    amplitudes = amplitudes,
-                    isRecording = isRecording,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(60.dp),
-                )
-
-                Spacer(Modifier.height(20.dp))
-
-                Text(
-                    text = "%02d:%02d".format(elapsedSeconds / 60, elapsedSeconds % 60),
-                    style = MaterialTheme.typography.displayMedium,
-                )
-
-                Spacer(Modifier.height(8.dp))
-
-                Text(
-                    text = if (isRecording) "録音中..." else "録音ボタンを押して開始",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-
-                Spacer(Modifier.height(28.dp))
-
-                Box(
-                    modifier = Modifier
-                        .size(64.dp)
-                        .clip(CircleShape)
-                        .background(Color(0xFFD32F2F))
-                        .clickable {
-                            if (isRecording) {
-                                recorder.stop()
-                                isRecording = false
-                                val file = currentFile
-                                if (file != null) {
-                                    val fmt = SimpleDateFormat("MM/dd HH:mm", Locale.getDefault())
-                                    onSaved(file, "録音 ${fmt.format(Date())}")
-                                }
-                            } else {
-                                val granted = ContextCompat.checkSelfPermission(
-                                    context,
-                                    Manifest.permission.RECORD_AUDIO,
-                                ) == PackageManager.PERMISSION_GRANTED
-                                if (granted) {
-                                    val file = newRecordingFile(context)
-                                    currentFile = file
-                                    recorder.start(file)
-                                    isRecording = true
-                                } else {
-                                    permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
-                                }
-                            }
-                        },
-                    contentAlignment = Alignment.Center,
-                ) {
-                    if (isRecording) {
-                        Box(
+                when (phase) {
+                    Phase.Idle, Phase.Recording -> {
+                        WaveformView(
+                            amplitudes = amplitudes,
+                            isRecording = isRecording,
                             modifier = Modifier
-                                .size(22.dp)
-                                .background(Color.White),
+                                .fillMaxWidth()
+                                .height(60.dp),
                         )
-                    } else {
+                        Spacer(Modifier.height(20.dp))
+                        Text(
+                            text = "%02d:%02d".format(elapsedSeconds / 60, elapsedSeconds % 60),
+                            style = MaterialTheme.typography.displayMedium,
+                        )
+                        Spacer(Modifier.height(8.dp))
+                        Text(
+                            text = if (isRecording) "録音中..." else "録音ボタンを押して開始",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        Spacer(Modifier.height(28.dp))
                         Box(
                             modifier = Modifier
-                                .size(26.dp)
+                                .size(64.dp)
                                 .clip(CircleShape)
-                                .background(Color.White),
+                                .background(Color(0xFFD32F2F))
+                                .clickable {
+                                    if (isRecording) stopRecording() else startRecording()
+                                },
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            if (isRecording) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(22.dp)
+                                        .background(Color.White),
+                                )
+                            } else {
+                                Box(
+                                    modifier = Modifier
+                                        .size(26.dp)
+                                        .clip(CircleShape)
+                                        .background(Color.White),
+                                )
+                            }
+                        }
+                        Spacer(Modifier.height(20.dp))
+                    }
+
+                    Phase.Review -> {
+                        Box(
+                            modifier = Modifier
+                                .size(64.dp)
+                                .clip(CircleShape)
+                                .background(Color(0xFFE8F5E9)),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Icon(
+                                imageVector = Icons.Filled.Check,
+                                contentDescription = null,
+                                tint = Color(0xFF4CAF50),
+                                modifier = Modifier.size(36.dp),
+                            )
+                        }
+                        Spacer(Modifier.height(12.dp))
+                        Text("録音完了", style = MaterialTheme.typography.titleMedium)
+                        Text(
+                            text = "%02d:%02d".format(recordedDuration / 60, recordedDuration % 60),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
+                        Spacer(Modifier.height(16.dp))
+                        OutlinedButton(
+                            onClick = {
+                                val file = currentFile ?: return@OutlinedButton
+                                if (isPreviewPlaying) {
+                                    previewPlayer?.stop()
+                                    previewPlayer?.release()
+                                    previewPlayer = null
+                                    isPreviewPlaying = false
+                                } else {
+                                    runCatching {
+                                        val player = MediaPlayer()
+                                        player.setDataSource(file.absolutePath)
+                                        player.prepare()
+                                        player.setOnCompletionListener {
+                                            isPreviewPlaying = false
+                                            previewPlayer = null
+                                            it.release()
+                                        }
+                                        player.start()
+                                        previewPlayer = player
+                                        isPreviewPlaying = true
+                                    }
+                                }
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            Icon(
+                                imageVector = if (isPreviewPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow,
+                                contentDescription = null,
+                            )
+                            Spacer(Modifier.width(4.dp))
+                            Text(if (isPreviewPlaying) "停止" else "再生して確認")
+                        }
+                        Spacer(Modifier.height(16.dp))
+                        Column(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalArrangement = Arrangement.spacedBy(4.dp),
+                        ) {
+                            Text("録音名", style = MaterialTheme.typography.labelMedium)
+                            OutlinedTextField(
+                                value = nameInput,
+                                onValueChange = { nameInput = it },
+                                placeholder = { Text("例: 自作メロディ1") },
+                                modifier = Modifier.fillMaxWidth(),
+                                singleLine = true,
+                            )
+                        }
+                        Spacer(Modifier.height(16.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            OutlinedButton(
+                                onClick = { reRecord() },
+                                modifier = Modifier.weight(1f),
+                            ) {
+                                Text("録り直す")
+                            }
+                            Button(
+                                onClick = { save() },
+                                modifier = Modifier.weight(1f),
+                            ) {
+                                Text("保存する")
+                            }
+                        }
+                        Spacer(Modifier.height(8.dp))
                     }
                 }
-
-                Spacer(Modifier.height(20.dp))
             }
         }
     }
