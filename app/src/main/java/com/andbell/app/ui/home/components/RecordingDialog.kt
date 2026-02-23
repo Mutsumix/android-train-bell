@@ -1,6 +1,10 @@
 package com.andbell.app.ui.home.components
 
+import android.Manifest
 import android.content.Context
+import android.content.pm.PackageManager
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -40,6 +44,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
+import androidx.core.content.ContextCompat
 import com.andbell.app.audio.AudioRecorder
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
@@ -62,6 +67,17 @@ fun RecordingDialog(
     val recorder = remember { AudioRecorder(context) }
     DisposableEffect(Unit) {
         onDispose { recorder.release() }
+    }
+
+    val permissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission(),
+    ) { isGranted ->
+        if (isGranted) {
+            val file = newRecordingFile(context)
+            currentFile = file
+            recorder.start(file)
+            isRecording = true
+        }
     }
 
     LaunchedEffect(isRecording) {
@@ -169,10 +185,18 @@ fun RecordingDialog(
                                     onSaved(file, "録音 ${fmt.format(Date())}")
                                 }
                             } else {
-                                val file = newRecordingFile(context)
-                                currentFile = file
-                                recorder.start(file)
-                                isRecording = true
+                                val granted = ContextCompat.checkSelfPermission(
+                                    context,
+                                    Manifest.permission.RECORD_AUDIO,
+                                ) == PackageManager.PERMISSION_GRANTED
+                                if (granted) {
+                                    val file = newRecordingFile(context)
+                                    currentFile = file
+                                    recorder.start(file)
+                                    isRecording = true
+                                } else {
+                                    permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+                                }
                             }
                         },
                     contentAlignment = Alignment.Center,
