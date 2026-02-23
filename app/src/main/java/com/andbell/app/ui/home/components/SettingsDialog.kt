@@ -38,6 +38,7 @@ fun SettingsDialog(
     doorAnnouncements: List<AudioItem>,
     onClose: () -> Unit,
     onDeleteAudio: (id: String, category: AudioCategory) -> Unit,
+    onRequestRecord: (AudioCategory) -> Unit,
     onRequestAddAudio: (AudioCategory) -> Unit,
 ) {
     if (!isOpen) return
@@ -92,6 +93,12 @@ fun SettingsDialog(
                             }
                         }
                     }
+                }
+                Button(
+                    onClick = { onRequestRecord(currentCategory) },
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text("録音して追加")
                 }
                 Button(
                     onClick = { onRequestAddAudio(currentCategory) },

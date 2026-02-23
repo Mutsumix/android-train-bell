@@ -35,6 +35,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.andbell.app.domain.model.AudioCategory
 import com.andbell.app.ui.home.components.AudioSelector
+import com.andbell.app.ui.home.components.RecordingDialog
 import com.andbell.app.ui.home.components.SettingsDialog
 import com.andbell.app.ui.home.components.SwitchButton
 import kotlinx.coroutines.flow.SharedFlow
@@ -48,6 +49,8 @@ fun HomeScreen(
     val snackbarHostState = remember { SnackbarHostState() }
     val context = LocalContext.current
     var addTargetCategory by remember { mutableStateOf(AudioCategory.DepartureBell) }
+    var showRecordingDialog by remember { mutableStateOf(false) }
+    var recordTargetCategory by remember { mutableStateOf(AudioCategory.DepartureBell) }
 
     val filePicker = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenMultipleDocuments(),
@@ -112,11 +115,25 @@ fun HomeScreen(
         doorAnnouncements = uiState.doorAnnouncements,
         onClose = viewModel::onCloseSettings,
         onDeleteAudio = viewModel::onDeleteAudio,
+        onRequestRecord = { category ->
+            recordTargetCategory = category
+            showRecordingDialog = true
+        },
         onRequestAddAudio = { category ->
             addTargetCategory = category
             filePicker.launch(arrayOf("audio/mpeg", "audio/mp3"))
         },
     )
+
+    if (showRecordingDialog) {
+        RecordingDialog(
+            onDismiss = { showRecordingDialog = false },
+            onSaved = { file, name ->
+                viewModel.onAddAudio(Uri.fromFile(file), name, recordTargetCategory)
+                showRecordingDialog = false
+            },
+        )
+    }
 }
 
 @Composable
