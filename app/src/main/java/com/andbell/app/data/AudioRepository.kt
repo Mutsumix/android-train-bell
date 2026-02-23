@@ -11,4 +11,5 @@ interface AudioRepository {
     suspend fun initialize(includeBundledAudio: Boolean)
     suspend fun appendUserAudio(item: AudioItem)
     suspend fun removeAudio(id: String, category: AudioCategory)
+    suspend fun renameAudio(id: String, newName: String, category: AudioCategory)
 }

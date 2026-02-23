@@ -36,4 +36,15 @@ class InMemoryAudioRepository : AudioRepository {
             AudioCategory.DoorAnnouncement -> _doorAnnouncements.value = _doorAnnouncements.value.filterNot { it.id == id }
         }
     }
+
+    override suspend fun renameAudio(id: String, newName: String, category: AudioCategory) {
+        when (category) {
+            AudioCategory.DepartureBell -> _departureBells.value = _departureBells.value.map {
+                if (it.id == id) it.copy(name = newName) else it
+            }
+            AudioCategory.DoorAnnouncement -> _doorAnnouncements.value = _doorAnnouncements.value.map {
+                if (it.id == id) it.copy(name = newName) else it
+            }
+        }
+    }
 }

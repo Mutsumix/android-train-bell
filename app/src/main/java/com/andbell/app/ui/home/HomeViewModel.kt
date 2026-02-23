@@ -150,6 +150,13 @@ class HomeViewModel(
         }
     }
 
+    fun onRenameAudio(id: String, newName: String, category: AudioCategory) {
+        viewModelScope.launch {
+            repository.renameAudio(id, newName, category)
+            persistUserItems()
+        }
+    }
+
     fun onDeleteAudio(id: String, category: AudioCategory) {
         viewModelScope.launch {
             repository.removeAudio(id, category)

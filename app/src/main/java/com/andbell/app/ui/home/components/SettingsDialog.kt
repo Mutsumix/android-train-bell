@@ -1,11 +1,15 @@
 package com.andbell.app.ui.home.components
 
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
@@ -17,6 +21,7 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
@@ -24,6 +29,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -34,6 +40,7 @@ import androidx.compose.ui.unit.dp
 import com.andbell.app.domain.model.AudioCategory
 import com.andbell.app.domain.model.AudioItem
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun SettingsDialog(
     isOpen: Boolean,
@@ -41,6 +48,7 @@ fun SettingsDialog(
     doorAnnouncements: List<AudioItem>,
     onClose: () -> Unit,
     onDeleteAudio: (id: String, category: AudioCategory) -> Unit,
+    onRenameAudio: (id: String, newName: String, category: AudioCategory) -> Unit,
     onRequestRecord: (AudioCategory) -> Unit,
     onRequestAddAudio: (AudioCategory) -> Unit,
 ) {
@@ -50,6 +58,9 @@ fun SettingsDialog(
     val isBellTab = selectedTab == 0
     val currentCategory = if (isBellTab) AudioCategory.DepartureBell else AudioCategory.DoorAnnouncement
     val currentItems = if (isBellTab) departureBells else doorAnnouncements
+
+    var renamingItem by remember { mutableStateOf<AudioItem?>(null) }
+    var renameInput by remember { mutableStateOf("") }
 
     AlertDialog(
         onDismissRequest = onClose,
@@ -86,7 +97,19 @@ fun SettingsDialog(
                                 style = MaterialTheme.typography.bodyMedium,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis,
-                                modifier = Modifier.weight(1f),
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .combinedClickable(
+                                        onClick = {},
+                                        onLongClick = if (item.isCustom) {
+                                            {
+                                                renamingItem = item
+                                                renameInput = item.name
+                                            }
+                                        } else {
+                                            null
+                                        },
+                                    ),
                             )
                             IconButton(onClick = { onDeleteAudio(item.id, item.category) }) {
                                 Icon(
@@ -119,4 +142,33 @@ fun SettingsDialog(
             }
         },
     )
+
+    renamingItem?.let { item ->
+        AlertDialog(
+            onDismissRequest = { renamingItem = null },
+            title = { Text("名前を変更") },
+            text = {
+                OutlinedTextField(
+                    value = renameInput,
+                    onValueChange = { renameInput = it },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        val trimmed = renameInput.trim()
+                        if (trimmed.isNotEmpty()) {
+                            onRenameAudio(item.id, trimmed, item.category)
+                        }
+                        renamingItem = null
+                    },
+                ) { Text("変更") }
+            },
+            dismissButton = {
+                TextButton(onClick = { renamingItem = null }) { Text("キャンセル") }
+            },
+        )
+    }
 }

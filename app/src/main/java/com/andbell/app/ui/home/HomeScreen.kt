@@ -115,6 +115,7 @@ fun HomeScreen(
         doorAnnouncements = uiState.doorAnnouncements,
         onClose = viewModel::onCloseSettings,
         onDeleteAudio = viewModel::onDeleteAudio,
+        onRenameAudio = viewModel::onRenameAudio,
         onRequestRecord = { category ->
             recordTargetCategory = category
             showRecordingDialog = true
