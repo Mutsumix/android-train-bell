@@ -7,38 +7,54 @@ import com.andbell.app.domain.model.AudioSourceType
 object DefaultAudioData {
     fun departureBells(): List<AudioItem> = listOf(
         AudioItem(
-            id = "sample-bell-1",
-            name = "サンプル 発車ベル 1",
+            id = "melody-bell-1",
+            name = "穏やかな旅立ち",
             category = AudioCategory.DepartureBell,
             sourceType = AudioSourceType.BundledTone,
-            uriOrResName = "tone_dtmf_1",
+            uriOrResName = "melody_departure_1",
             isCustom = false,
         ),
         AudioItem(
-            id = "sample-bell-2",
-            name = "サンプル 発車ベル 2",
+            id = "melody-bell-2",
+            name = "クラシカルベル",
             category = AudioCategory.DepartureBell,
             sourceType = AudioSourceType.BundledTone,
-            uriOrResName = "tone_dtmf_3",
+            uriOrResName = "melody_departure_2",
+            isCustom = false,
+        ),
+        AudioItem(
+            id = "melody-bell-3",
+            name = "キラキラステーション",
+            category = AudioCategory.DepartureBell,
+            sourceType = AudioSourceType.BundledTone,
+            uriOrResName = "melody_departure_3",
             isCustom = false,
         ),
     )
 
     fun doorAnnouncements(): List<AudioItem> = listOf(
         AudioItem(
-            id = "sample-door-1",
-            name = "サンプル 戸閉放送 1",
+            id = "melody-door-1",
+            name = "下降",
             category = AudioCategory.DoorAnnouncement,
             sourceType = AudioSourceType.BundledTone,
-            uriOrResName = "tone_prop_ack",
+            uriOrResName = "melody_door_1",
             isCustom = false,
         ),
         AudioItem(
-            id = "sample-door-2",
-            name = "サンプル 戸閉放送 2",
+            id = "melody-door-2",
+            name = "ピンポン",
             category = AudioCategory.DoorAnnouncement,
             sourceType = AudioSourceType.BundledTone,
-            uriOrResName = "tone_prop_beep",
+            uriOrResName = "melody_door_2",
+            isCustom = false,
+        ),
+        AudioItem(
+            id = "melody-door-3",
+            name = "やさしみ",
+            category = AudioCategory.DoorAnnouncement,
+            sourceType = AudioSourceType.BundledTone,
+            uriOrResName = "melody_door_3",
             isCustom = false,
         ),
     )
