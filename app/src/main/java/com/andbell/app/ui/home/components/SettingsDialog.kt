@@ -113,11 +113,13 @@ fun SettingsDialog(
                                             },
                                         ),
                                 )
-                                IconButton(onClick = { onDeleteAudio(item.id, item.category) }) {
-                                    Icon(
-                                        imageVector = Icons.Filled.Delete,
-                                        contentDescription = "削除",
-                                    )
+                                if (item.isCustom) {
+                                    IconButton(onClick = { onDeleteAudio(item.id, item.category) }) {
+                                        Icon(
+                                            imageVector = Icons.Filled.Delete,
+                                            contentDescription = "削除",
+                                        )
+                                    }
                                 }
                             }
                             // 長押しで表示するコンテキストメニュー
