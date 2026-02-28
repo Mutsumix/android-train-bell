@@ -3,12 +3,14 @@ package com.andbell.app.ui.home.components
 import android.Manifest
 import android.content.Context
 import android.content.pm.PackageManager
+import android.media.MediaMetadataRetriever
 import android.media.MediaPlayer
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -27,20 +29,25 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -49,19 +56,27 @@ import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.core.content.ContextCompat
 import com.andbell.app.audio.AudioRecorder
+import com.andbell.app.audio.AudioTrimmer
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import kotlin.math.abs
 
 private enum class Phase { Idle, Recording, Review }
+private enum class DragHandle { Start, End }
 
 @Composable
 fun RecordingDialog(
@@ -69,6 +84,8 @@ fun RecordingDialog(
     onSaved: (file: File, displayName: String) -> Unit,
 ) {
     val context = LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
+    val trimmer = remember { AudioTrimmer() }
 
     var phase by remember { mutableStateOf(Phase.Idle) }
     var elapsedSeconds by remember { mutableStateOf(0) }
@@ -78,6 +95,14 @@ fun RecordingDialog(
     var nameInput by remember { mutableStateOf("") }
     var isPreviewPlaying by remember { mutableStateOf(false) }
     var previewPlayer by remember { mutableStateOf<MediaPlayer?>(null) }
+
+    var recordedDurationMs by remember { mutableStateOf(0L) }
+    var trimStartMs by remember { mutableStateOf(0L) }
+    var trimEndMs by remember { mutableStateOf(0L) }
+    var playPositionMs by remember { mutableStateOf(0L) }
+    var isSaving by remember { mutableStateOf(false) }
+    var saveError by remember { mutableStateOf<String?>(null) }
+    var showDismissConfirm by remember { mutableStateOf(false) }
 
     val recorder = remember { AudioRecorder(context) }
 
@@ -109,6 +134,52 @@ fun RecordingDialog(
             }
         } else {
             amplitudes = List(50) { 0f }
+        }
+    }
+
+    // Reviewフェーズ突入時にファイル実長を取得してトリム範囲を初期化
+    LaunchedEffect(phase) {
+        if (phase == Phase.Review) {
+            val file = currentFile ?: return@LaunchedEffect
+            withContext(Dispatchers.IO) {
+                val retriever = MediaMetadataRetriever()
+                try {
+                    retriever.setDataSource(file.absolutePath)
+                    val dur = retriever
+                        .extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)
+                        ?.toLongOrNull()
+                        ?: (recordedDuration * 1000L)
+                    recordedDurationMs = dur
+                    trimStartMs = 0L
+                    trimEndMs = dur
+                    playPositionMs = 0L
+                } finally {
+                    retriever.release()
+                }
+            }
+        }
+    }
+
+    // 非再生中はトリム開始位置にプレイヘッドを追従させる
+    LaunchedEffect(trimStartMs) {
+        if (!isPreviewPlaying) playPositionMs = trimStartMs
+    }
+
+    // 再生位置をポーリングし、trimEndMs で自動停止
+    LaunchedEffect(isPreviewPlaying) {
+        if (!isPreviewPlaying) return@LaunchedEffect
+        while (isActive) {
+            val pos = previewPlayer?.currentPosition?.toLong() ?: break
+            playPositionMs = pos
+            if (pos >= trimEndMs) {
+                previewPlayer?.stop()
+                previewPlayer?.release()
+                previewPlayer = null
+                isPreviewPlaying = false
+                playPositionMs = trimStartMs
+                break
+            }
+            delay(16)
         }
     }
 
@@ -151,7 +222,38 @@ fun RecordingDialog(
         currentFile?.delete()
         currentFile = null
         nameInput = ""
+        trimStartMs = 0L
+        trimEndMs = 0L
+        recordedDurationMs = 0L
+        playPositionMs = 0L
+        isSaving = false
+        saveError = null
         phase = Phase.Idle
+    }
+
+    fun togglePreview() {
+        val file = currentFile ?: return
+        if (isPreviewPlaying) {
+            previewPlayer?.stop()
+            previewPlayer?.release()
+            previewPlayer = null
+            isPreviewPlaying = false
+        } else {
+            runCatching {
+                val player = MediaPlayer()
+                player.setDataSource(file.absolutePath)
+                player.prepare()
+                player.seekTo(trimStartMs.toInt())
+                player.setOnCompletionListener {
+                    isPreviewPlaying = false
+                    previewPlayer = null
+                    it.release()
+                }
+                player.start()
+                previewPlayer = player
+                isPreviewPlaying = true
+            }
+        }
     }
 
     fun save() {
@@ -162,7 +264,31 @@ fun RecordingDialog(
         }
         previewPlayer?.release()
         previewPlayer = null
-        onSaved(file, name)
+        isPreviewPlaying = false
+
+        val needsTrim = trimStartMs > 0 || trimEndMs < recordedDurationMs
+        if (!needsTrim) {
+            onSaved(file, name)
+            return
+        }
+
+        isSaving = true
+        saveError = null
+        coroutineScope.launch {
+            val dir = File(context.filesDir, "recordings")
+            val trimmedFile = File(dir, "trimmed_${System.currentTimeMillis()}.m4a")
+            val result = trimmer.trim(file, trimmedFile, trimStartMs, trimEndMs)
+            isSaving = false
+            result.fold(
+                onSuccess = { outFile ->
+                    file.delete()
+                    onSaved(outFile, name)
+                },
+                onFailure = {
+                    saveError = "トリミングに失敗しました"
+                },
+            )
+        }
     }
 
     fun dismiss() {
@@ -173,7 +299,33 @@ fun RecordingDialog(
         onDismiss()
     }
 
-    Dialog(onDismissRequest = { dismiss() }) {
+    fun requestDismiss() {
+        if (phase == Phase.Review) {
+            showDismissConfirm = true
+        } else {
+            dismiss()
+        }
+    }
+
+    if (showDismissConfirm) {
+        AlertDialog(
+            onDismissRequest = { showDismissConfirm = false },
+            title = { Text("録音を破棄しますか？") },
+            text = { Text("編集中の内容は保存されません。") },
+            confirmButton = {
+                TextButton(onClick = { showDismissConfirm = false; dismiss() }) {
+                    Text("破棄する", color = MaterialTheme.colorScheme.error)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDismissConfirm = false }) {
+                    Text("キャンセル")
+                }
+            },
+        )
+    }
+
+    Dialog(onDismissRequest = { requestDismiss() }) {
         Card(
             modifier = Modifier
                 .fillMaxWidth()
@@ -190,7 +342,7 @@ fun RecordingDialog(
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Text("音声を録音", style = MaterialTheme.typography.titleLarge)
-                    IconButton(onClick = { dismiss() }) {
+                    IconButton(onClick = { requestDismiss() }) {
                         Icon(Icons.Default.Close, contentDescription = "閉じる")
                     }
                 }
@@ -270,29 +422,7 @@ fun RecordingDialog(
                         )
                         Spacer(Modifier.height(16.dp))
                         OutlinedButton(
-                            onClick = {
-                                val file = currentFile ?: return@OutlinedButton
-                                if (isPreviewPlaying) {
-                                    previewPlayer?.stop()
-                                    previewPlayer?.release()
-                                    previewPlayer = null
-                                    isPreviewPlaying = false
-                                } else {
-                                    runCatching {
-                                        val player = MediaPlayer()
-                                        player.setDataSource(file.absolutePath)
-                                        player.prepare()
-                                        player.setOnCompletionListener {
-                                            isPreviewPlaying = false
-                                            previewPlayer = null
-                                            it.release()
-                                        }
-                                        player.start()
-                                        previewPlayer = player
-                                        isPreviewPlaying = true
-                                    }
-                                }
-                            },
+                            onClick = { togglePreview() },
                             modifier = Modifier.fillMaxWidth(),
                         ) {
                             Icon(
@@ -302,6 +432,46 @@ fun RecordingDialog(
                             Spacer(Modifier.width(4.dp))
                             Text(if (isPreviewPlaying) "停止" else "再生して確認")
                         }
+
+                        // トリムバー（ファイル長取得後に表示）
+                        if (recordedDurationMs > 0) {
+                            Spacer(Modifier.height(16.dp))
+                            Text(
+                                text = "トリミング",
+                                style = MaterialTheme.typography.labelMedium,
+                                modifier = Modifier.fillMaxWidth(),
+                            )
+                            Spacer(Modifier.height(8.dp))
+                            TrimBar(
+                                durationMs = recordedDurationMs,
+                                trimStartMs = trimStartMs,
+                                trimEndMs = trimEndMs,
+                                playPositionMs = playPositionMs,
+                                onTrimChange = { start, end ->
+                                    trimStartMs = start
+                                    trimEndMs = end
+                                },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(40.dp),
+                            )
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                            ) {
+                                Text(
+                                    text = formatMs(trimStartMs),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                                Text(
+                                    text = formatMs(trimEndMs),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                        }
+
                         Spacer(Modifier.height(16.dp))
                         Column(
                             modifier = Modifier.fillMaxWidth(),
@@ -316,6 +486,16 @@ fun RecordingDialog(
                                 singleLine = true,
                             )
                         }
+
+                        if (saveError != null) {
+                            Spacer(Modifier.height(8.dp))
+                            Text(
+                                text = saveError!!,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.error,
+                            )
+                        }
+
                         Spacer(Modifier.height(16.dp))
                         Row(
                             modifier = Modifier.fillMaxWidth(),
@@ -324,14 +504,26 @@ fun RecordingDialog(
                             OutlinedButton(
                                 onClick = { reRecord() },
                                 modifier = Modifier.weight(1f),
+                                enabled = !isSaving,
                             ) {
                                 Text("録り直す")
                             }
                             Button(
                                 onClick = { save() },
                                 modifier = Modifier.weight(1f),
+                                enabled = !isSaving,
                             ) {
-                                Text("保存する")
+                                if (isSaving) {
+                                    CircularProgressIndicator(
+                                        modifier = Modifier.size(16.dp),
+                                        strokeWidth = 2.dp,
+                                        color = MaterialTheme.colorScheme.onPrimary,
+                                    )
+                                    Spacer(Modifier.width(8.dp))
+                                    Text("保存中...")
+                                } else {
+                                    Text("保存する")
+                                }
                             }
                         }
                         Spacer(Modifier.height(8.dp))
@@ -339,6 +531,113 @@ fun RecordingDialog(
                 }
             }
         }
+    }
+}
+
+/**
+ * トリムハンドル（●）とプレイヘッド（赤●）を持つカスタムトリムバー。
+ * - 外側の大きな●: トリム開始・終了ハンドル（ドラッグ可）
+ * - 赤い小さな●: 現在の再生位置
+ */
+@Composable
+private fun TrimBar(
+    durationMs: Long,
+    trimStartMs: Long,
+    trimEndMs: Long,
+    playPositionMs: Long,
+    onTrimChange: (startMs: Long, endMs: Long) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    if (durationMs <= 0) return
+
+    val primaryColor = MaterialTheme.colorScheme.primary
+    val surfaceVariantColor = MaterialTheme.colorScheme.surfaceVariant
+    val playheadColor = Color(0xFFD32F2F)
+    val density = LocalDensity.current
+
+    // pointerInput の中で最新値を参照するために rememberUpdatedState を使用
+    val currentTrimStart by rememberUpdatedState(trimStartMs)
+    val currentTrimEnd by rememberUpdatedState(trimEndMs)
+    val currentDuration by rememberUpdatedState(durationMs)
+    val currentOnTrimChange by rememberUpdatedState(onTrimChange)
+
+    Canvas(
+        modifier = modifier.pointerInput(Unit) {
+            val hitRadiusPx = with(density) { 24.dp.toPx() }
+            var dragging: DragHandle? = null
+
+            detectDragGestures(
+                onDragStart = { offset ->
+                    val w = size.width.toFloat()
+                    val sx = (currentTrimStart.toFloat() / currentDuration) * w
+                    val ex = (currentTrimEnd.toFloat() / currentDuration) * w
+                    val dStart = abs(offset.x - sx)
+                    val dEnd = abs(offset.x - ex)
+                    dragging = when {
+                        dStart <= hitRadiusPx && dEnd <= hitRadiusPx ->
+                            if (dStart <= dEnd) DragHandle.Start else DragHandle.End
+                        dStart <= hitRadiusPx -> DragHandle.Start
+                        dEnd <= hitRadiusPx -> DragHandle.End
+                        else -> null
+                    }
+                },
+                onDrag = { change, _ ->
+                    val w = size.width.toFloat()
+                    val fraction = (change.position.x / w).coerceIn(0f, 1f)
+                    val newMs = (fraction * currentDuration).toLong()
+                    when (dragging) {
+                        DragHandle.Start -> currentOnTrimChange(
+                            newMs.coerceIn(0L, currentTrimEnd - 200L),
+                            currentTrimEnd,
+                        )
+                        DragHandle.End -> currentOnTrimChange(
+                            currentTrimStart,
+                            newMs.coerceIn(currentTrimStart + 200L, currentDuration),
+                        )
+                        null -> {}
+                    }
+                    change.consume()
+                },
+                onDragEnd = { dragging = null },
+                onDragCancel = { dragging = null },
+            )
+        },
+    ) {
+        val centerY = size.height / 2f
+        val trackH = 4.dp.toPx()
+        val handleR = 10.dp.toPx()
+        val playR = 6.dp.toPx()
+
+        val startX = (trimStartMs.toFloat() / durationMs) * size.width
+        val endX = (trimEndMs.toFloat() / durationMs) * size.width
+        val playX = (playPositionMs.toFloat() / durationMs).coerceIn(0f, 1f) * size.width
+
+        // グレーのベーストラック
+        drawRoundRect(
+            color = surfaceVariantColor,
+            topLeft = Offset(0f, centerY - trackH / 2),
+            size = Size(size.width, trackH),
+            cornerRadius = CornerRadius(trackH / 2),
+        )
+
+        // 選択範囲をプライマリカラーで強調
+        drawRoundRect(
+            color = primaryColor,
+            topLeft = Offset(startX, centerY - trackH / 2),
+            size = Size((endX - startX).coerceAtLeast(0f), trackH),
+            cornerRadius = CornerRadius(trackH / 2),
+        )
+
+        // プレイヘッド（赤●）—ハンドルより先に描いてハンドルが上に来る
+        drawCircle(color = playheadColor, radius = playR, center = Offset(playX, centerY))
+
+        // 開始ハンドル（プライマリ色の大●＋白い中心点）
+        drawCircle(color = primaryColor, radius = handleR, center = Offset(startX, centerY))
+        drawCircle(color = Color.White, radius = handleR * 0.38f, center = Offset(startX, centerY))
+
+        // 終了ハンドル
+        drawCircle(color = primaryColor, radius = handleR, center = Offset(endX, centerY))
+        drawCircle(color = Color.White, radius = handleR * 0.38f, center = Offset(endX, centerY))
     }
 }
 
@@ -380,4 +679,9 @@ private fun newRecordingFile(context: Context): File {
     val dir = File(context.filesDir, "recordings")
     dir.mkdirs()
     return File(dir, "recording_${System.currentTimeMillis()}.m4a")
+}
+
+private fun formatMs(ms: Long): String {
+    val totalSeconds = ms / 1000
+    return "%02d:%02d".format(totalSeconds / 60, totalSeconds % 60)
 }
