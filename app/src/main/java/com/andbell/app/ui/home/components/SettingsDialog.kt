@@ -15,6 +15,8 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Mic
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -51,6 +53,7 @@ fun SettingsDialog(
     onRenameAudio: (id: String, newName: String, category: AudioCategory) -> Unit,
     onRequestRecord: (AudioCategory) -> Unit,
     onRequestAddAudio: (AudioCategory) -> Unit,
+    onRequestTrim: (AudioItem) -> Unit,
 ) {
     if (!isOpen) return
 
@@ -61,6 +64,7 @@ fun SettingsDialog(
 
     var renamingItem by remember { mutableStateOf<AudioItem?>(null) }
     var renameInput by remember { mutableStateOf("") }
+    var contextMenuItem by remember { mutableStateOf<AudioItem?>(null) }
 
     AlertDialog(
         onDismissRequest = onClose,
@@ -86,35 +90,55 @@ fun SettingsDialog(
                         .heightIn(max = 400.dp),
                 ) {
                     items(currentItems, key = { it.id }) { item ->
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 4.dp),
-                        ) {
-                            Text(
-                                text = item.name,
-                                style = MaterialTheme.typography.bodyMedium,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
+                        androidx.compose.foundation.layout.Box {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
                                 modifier = Modifier
-                                    .weight(1f)
-                                    .combinedClickable(
-                                        onClick = {},
-                                        onLongClick = if (item.isCustom) {
-                                            {
-                                                renamingItem = item
-                                                renameInput = item.name
-                                            }
-                                        } else {
-                                            null
-                                        },
-                                    ),
-                            )
-                            IconButton(onClick = { onDeleteAudio(item.id, item.category) }) {
-                                Icon(
-                                    imageVector = Icons.Filled.Delete,
-                                    contentDescription = "削除",
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 4.dp),
+                            ) {
+                                Text(
+                                    text = item.name,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .combinedClickable(
+                                            onClick = {},
+                                            onLongClick = if (item.isCustom) {
+                                                { contextMenuItem = item }
+                                            } else {
+                                                null
+                                            },
+                                        ),
+                                )
+                                IconButton(onClick = { onDeleteAudio(item.id, item.category) }) {
+                                    Icon(
+                                        imageVector = Icons.Filled.Delete,
+                                        contentDescription = "削除",
+                                    )
+                                }
+                            }
+                            // 長押しで表示するコンテキストメニュー
+                            DropdownMenu(
+                                expanded = contextMenuItem?.id == item.id,
+                                onDismissRequest = { contextMenuItem = null },
+                            ) {
+                                DropdownMenuItem(
+                                    text = { Text("名前を変更") },
+                                    onClick = {
+                                        renamingItem = item
+                                        renameInput = item.name
+                                        contextMenuItem = null
+                                    },
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("トリミング編集") },
+                                    onClick = {
+                                        onRequestTrim(item)
+                                        contextMenuItem = null
+                                    },
                                 )
                             }
                         }

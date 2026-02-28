@@ -12,4 +12,5 @@ interface AudioRepository {
     suspend fun appendUserAudio(item: AudioItem)
     suspend fun removeAudio(id: String, category: AudioCategory)
     suspend fun renameAudio(id: String, newName: String, category: AudioCategory)
+    suspend fun retrimAudio(id: String, trimStartMs: Long, trimEndMs: Long?, category: AudioCategory)
 }

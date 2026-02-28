@@ -47,4 +47,15 @@ class InMemoryAudioRepository : AudioRepository {
             }
         }
     }
+
+    override suspend fun retrimAudio(id: String, trimStartMs: Long, trimEndMs: Long?, category: AudioCategory) {
+        when (category) {
+            AudioCategory.DepartureBell -> _departureBells.value = _departureBells.value.map {
+                if (it.id == id) it.copy(trimStartMs = trimStartMs, trimEndMs = trimEndMs) else it
+            }
+            AudioCategory.DoorAnnouncement -> _doorAnnouncements.value = _doorAnnouncements.value.map {
+                if (it.id == id) it.copy(trimStartMs = trimStartMs, trimEndMs = trimEndMs) else it
+            }
+        }
+    }
 }
