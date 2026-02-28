@@ -2,9 +2,9 @@ package com.andbell.app.player
 
 import android.content.Context
 import android.media.MediaPlayer
-import android.media.ToneGenerator
-import android.media.AudioManager
 import android.net.Uri
+import android.os.Handler
+import android.os.Looper
 import com.andbell.app.domain.model.AudioItem
 import com.andbell.app.domain.model.AudioSourceType
 
@@ -13,7 +13,9 @@ class MediaPlayerAudioPlayer(
     private val onError: (Throwable) -> Unit,
 ) : AudioPlayer {
     private var mediaPlayer: MediaPlayer? = null
-    private val toneGenerator = ToneGenerator(AudioManager.STREAM_MUSIC, 100)
+    private val melodyPlayer = MelodyPlayer()
+    private val handler = Handler(Looper.getMainLooper())
+    private var autoStopRunnable: Runnable? = null
 
     override fun play(item: AudioItem) {
         runCatching {
@@ -21,37 +23,55 @@ class MediaPlayerAudioPlayer(
             when (item.sourceType) {
                 AudioSourceType.UserUri -> {
                     val uri = Uri.parse(item.uriOrResName)
-                    val created = MediaPlayer.create(context, uri)
-                        ?: error("音声ファイルを読み込めませんでした: ${item.name}")
-                    created.start()
-                    mediaPlayer = created
+                    val mp = MediaPlayer()
+                    mp.setDataSource(context, uri)
+                    mp.prepare()
+                    if (item.trimStartMs > 0L) mp.seekTo(item.trimStartMs.toInt())
+                    mp.setOnCompletionListener { stop() }
+                    mp.start()
+                    mediaPlayer = mp
+
+                    // trimEndMs が設定されていれば、その時点で自動停止
+                    item.trimEndMs?.let { endMs ->
+                        val playDuration = endMs - item.trimStartMs
+                        val runnable = Runnable { stop() }
+                        autoStopRunnable = runnable
+                        handler.postDelayed(runnable, playDuration)
+                    }
                 }
                 AudioSourceType.BundledTone -> {
-                    val toneType = resolveTone(item.uriOrResName)
-                    toneGenerator.startTone(toneType, 1200)
+                    val melody = resolveMelody(item.uriOrResName)
+                    if (melody != null) {
+                        melodyPlayer.play(melody)
+                    }
                 }
             }
         }.onFailure(onError)
     }
 
     override fun stop() {
+        autoStopRunnable?.let { handler.removeCallbacks(it) }
+        autoStopRunnable = null
         mediaPlayer?.runCatching {
             if (isPlaying) stop()
         }
         mediaPlayer?.release()
         mediaPlayer = null
+        melodyPlayer.stop()
     }
 
     override fun release() {
         stop()
-        toneGenerator.release()
+        handler.removeCallbacksAndMessages(null)
     }
 
-    private fun resolveTone(key: String): Int = when (key) {
-        "tone_dtmf_1" -> ToneGenerator.TONE_DTMF_1
-        "tone_dtmf_3" -> ToneGenerator.TONE_DTMF_3
-        "tone_prop_ack" -> ToneGenerator.TONE_PROP_ACK
-        "tone_prop_beep" -> ToneGenerator.TONE_PROP_BEEP
-        else -> ToneGenerator.TONE_PROP_BEEP2
+    private fun resolveMelody(key: String): List<MelodyPlayer.Note>? = when (key) {
+        "melody_departure_1" -> Melodies.departureBell1
+        "melody_departure_2" -> Melodies.departureBell2
+        "melody_departure_3" -> Melodies.departureBell3
+        "melody_door_1" -> Melodies.doorChime1
+        "melody_door_2" -> Melodies.doorChime2
+        "melody_door_3" -> Melodies.doorChime3
+        else -> null
     }
 }
