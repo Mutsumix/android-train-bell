@@ -51,6 +51,8 @@ class MelodyPlayer {
         audioTrack?.play()
     }
 
+    fun isPlaying(): Boolean = audioTrack?.playState == AudioTrack.PLAYSTATE_PLAYING
+
     fun stop() {
         audioTrack?.runCatching {
             stop()
