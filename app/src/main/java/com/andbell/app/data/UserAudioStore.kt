@@ -66,6 +66,9 @@ class UserAudioStore(
         }
     }
 
+    // フォーマット: id|name|category|uri|trimStartMs|trimEndMs
+    // trimEndMs は空文字 = null（ファイル末尾まで）
+    // 旧フォーマット（4フィールド）との後方互換あり
     private fun encodeItems(items: List<AudioItem>): String = items.joinToString(separator = "\n") { item ->
         val category = when (item.category) {
             AudioCategory.DepartureBell -> "bell"
@@ -73,7 +76,8 @@ class UserAudioStore(
         }
         val safeName = item.name.replace("|", " ")
         val safeUri = item.uriOrResName.replace("|", "%7C")
-        listOf(item.id, safeName, category, safeUri).joinToString(separator = "|")
+        val trimEnd = item.trimEndMs?.toString() ?: ""
+        listOf(item.id, safeName, category, safeUri, item.trimStartMs.toString(), trimEnd).joinToString(separator = "|")
     }
 
     private fun decodeItems(raw: String?): List<AudioItem> {
@@ -88,6 +92,8 @@ class UserAudioStore(
                     "door" -> AudioCategory.DoorAnnouncement
                     else -> return@mapNotNull null
                 }
+                val trimStartMs = parts.getOrNull(4)?.toLongOrNull() ?: 0L
+                val trimEndMs = parts.getOrNull(5)?.takeIf { it.isNotEmpty() }?.toLongOrNull()
                 AudioItem(
                     id = parts[0],
                     name = parts[1],
@@ -95,6 +101,8 @@ class UserAudioStore(
                     sourceType = AudioSourceType.UserUri,
                     uriOrResName = parts[3].replace("%7C", "|"),
                     isCustom = true,
+                    trimStartMs = trimStartMs,
+                    trimEndMs = trimEndMs,
                 )
             }
     }

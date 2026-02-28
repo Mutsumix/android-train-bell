@@ -34,10 +34,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.andbell.app.domain.model.AudioCategory
+import com.andbell.app.domain.model.AudioItem
 import com.andbell.app.ui.home.components.AudioSelector
 import com.andbell.app.ui.home.components.RecordingDialog
 import com.andbell.app.ui.home.components.SettingsDialog
 import com.andbell.app.ui.home.components.SwitchButton
+import com.andbell.app.ui.home.components.TrimEditDialog
 import kotlinx.coroutines.flow.SharedFlow
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -51,6 +53,7 @@ fun HomeScreen(
     var addTargetCategory by remember { mutableStateOf(AudioCategory.DepartureBell) }
     var showRecordingDialog by remember { mutableStateOf(false) }
     var recordTargetCategory by remember { mutableStateOf(AudioCategory.DepartureBell) }
+    var trimmingItem by remember { mutableStateOf<AudioItem?>(null) }
 
     val filePicker = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenMultipleDocuments(),
@@ -124,7 +127,21 @@ fun HomeScreen(
             addTargetCategory = category
             filePicker.launch(arrayOf("audio/mpeg", "audio/mp3"))
         },
+        onRequestTrim = { item ->
+            trimmingItem = item
+        },
     )
+
+    trimmingItem?.let { item ->
+        TrimEditDialog(
+            item = item,
+            onDismiss = { trimmingItem = null },
+            onSaved = { trimStart, trimEnd ->
+                viewModel.onRetrimAudio(item.id, trimStart, trimEnd, item.category)
+                trimmingItem = null
+            },
+        )
+    }
 
     if (showRecordingDialog) {
         RecordingDialog(

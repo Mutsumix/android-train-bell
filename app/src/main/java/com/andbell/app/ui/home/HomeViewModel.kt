@@ -157,6 +157,13 @@ class HomeViewModel(
         }
     }
 
+    fun onRetrimAudio(id: String, trimStartMs: Long, trimEndMs: Long?, category: AudioCategory) {
+        viewModelScope.launch {
+            repository.retrimAudio(id, trimStartMs, trimEndMs, category)
+            persistUserItems()
+        }
+    }
+
     fun onDeleteAudio(id: String, category: AudioCategory) {
         viewModelScope.launch {
             repository.removeAudio(id, category)

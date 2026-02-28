@@ -17,4 +17,8 @@ data class AudioItem(
     val sourceType: AudioSourceType,
     val uriOrResName: String,
     val isCustom: Boolean,
+    /** 再生開始オフセット（ms）。0 = ファイル先頭から */
+    val trimStartMs: Long = 0L,
+    /** 再生終了位置（ms）。null = ファイル末尾まで */
+    val trimEndMs: Long? = null,
 )
