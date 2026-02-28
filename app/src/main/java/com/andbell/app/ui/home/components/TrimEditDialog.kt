@@ -42,7 +42,7 @@ import kotlinx.coroutines.withContext
 /**
  * 保存済みカスタム音声のトリム範囲を編集するダイアログ。
  * - トリムはメタデータのみ更新（物理ファイルは変更しない・即時保存）
- * - 現在の [item.trimStartMs]..[item.trimEndMs] の範囲内でのみ短くできる
+ * - ファイル全体（0〜fileDurationMs）の中で自由に調整できる
  */
 @Composable
 fun TrimEditDialog(
@@ -55,9 +55,6 @@ fun TrimEditDialog(
     var fileDurationMs by remember { mutableStateOf(0L) }
     var trimStartMs by remember { mutableStateOf(item.trimStartMs) }
     var trimEndMs by remember { mutableStateOf(item.trimEndMs ?: 0L) }
-    // 動かせる上下限（これより広くはできない）
-    val minBoundMs = item.trimStartMs
-    var maxBoundMs by remember { mutableStateOf(item.trimEndMs ?: Long.MAX_VALUE) }
 
     var playPositionMs by remember { mutableStateOf(item.trimStartMs) }
     var isPlaying by remember { mutableStateOf(false) }
@@ -77,9 +74,7 @@ fun TrimEditDialog(
                     .extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)
                     ?.toLongOrNull() ?: return@withContext
                 fileDurationMs = dur
-                val initialEnd = item.trimEndMs ?: dur
-                trimEndMs = initialEnd
-                maxBoundMs = initialEnd
+                trimEndMs = item.trimEndMs ?: dur
                 playPositionMs = item.trimStartMs
             } finally {
                 retriever.release()
@@ -195,8 +190,6 @@ fun TrimEditDialog(
                         trimStartMs = trimStartMs,
                         trimEndMs = trimEndMs,
                         playPositionMs = playPositionMs,
-                        minBoundMs = minBoundMs,
-                        maxBoundMs = maxBoundMs,
                         onTrimChange = { start, end ->
                             trimStartMs = start
                             trimEndMs = end

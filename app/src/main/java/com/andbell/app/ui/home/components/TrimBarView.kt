@@ -22,14 +22,11 @@ internal enum class DragHandle { Start, End }
  *
  * - 大きな●（プライマリ色）: 開始・終了ハンドル（ドラッグで移動）
  * - 赤い小さな●: 再生中の現在位置（playPositionMs）
- * - [minBoundMs]..[maxBoundMs] の範囲外はロック済みとして薄く表示
  *
  * @param durationMs      ファイル全体の長さ（ms）
  * @param trimStartMs     現在のトリム開始位置（ms）
  * @param trimEndMs       現在のトリム終了位置（ms）
  * @param playPositionMs  再生中の現在位置（ms、絶対値）
- * @param minBoundMs      開始ハンドルが動ける下限（デフォルト 0）
- * @param maxBoundMs      終了ハンドルが動ける上限（デフォルト durationMs）
  * @param onTrimChange    ハンドルドラッグ時のコールバック
  */
 @Composable
@@ -40,22 +37,17 @@ internal fun TrimBar(
     playPositionMs: Long,
     onTrimChange: (startMs: Long, endMs: Long) -> Unit,
     modifier: Modifier = Modifier,
-    minBoundMs: Long = 0L,
-    maxBoundMs: Long = durationMs,
 ) {
     if (durationMs <= 0) return
 
     val primaryColor = androidx.compose.material3.MaterialTheme.colorScheme.primary
     val surfaceVariantColor = androidx.compose.material3.MaterialTheme.colorScheme.surfaceVariant
-    val lockedColor = surfaceVariantColor.copy(alpha = 0.4f)
     val playheadColor = Color(0xFFD32F2F)
     val density = LocalDensity.current
 
     val currentTrimStart by rememberUpdatedState(trimStartMs)
     val currentTrimEnd by rememberUpdatedState(trimEndMs)
     val currentDuration by rememberUpdatedState(durationMs)
-    val currentMinBound by rememberUpdatedState(minBoundMs)
-    val currentMaxBound by rememberUpdatedState(maxBoundMs)
     val currentOnTrimChange by rememberUpdatedState(onTrimChange)
 
     Canvas(
@@ -84,12 +76,12 @@ internal fun TrimBar(
                     val newMs = (fraction * currentDuration).toLong()
                     when (dragging) {
                         DragHandle.Start -> currentOnTrimChange(
-                            newMs.coerceIn(currentMinBound, currentTrimEnd - 200L),
+                            newMs.coerceIn(0L, currentTrimEnd - 200L),
                             currentTrimEnd,
                         )
                         DragHandle.End -> currentOnTrimChange(
                             currentTrimStart,
-                            newMs.coerceIn(currentTrimStart + 200L, currentMaxBound),
+                            newMs.coerceIn(currentTrimStart + 200L, currentDuration),
                         )
                         null -> {}
                     }
@@ -107,8 +99,6 @@ internal fun TrimBar(
 
         val startX = (trimStartMs.toFloat() / durationMs) * size.width
         val endX = (trimEndMs.toFloat() / durationMs) * size.width
-        val minX = (minBoundMs.toFloat() / durationMs) * size.width
-        val maxX = (maxBoundMs.toFloat() / durationMs) * size.width
         val playX = (playPositionMs.toFloat() / durationMs).coerceIn(0f, 1f) * size.width
 
         // ベーストラック（グレー）
@@ -118,26 +108,6 @@ internal fun TrimBar(
             size = Size(size.width, trackH),
             cornerRadius = CornerRadius(trackH / 2),
         )
-
-        // ロック済み範囲（左）
-        if (minBoundMs > 0L) {
-            drawRoundRect(
-                color = lockedColor,
-                topLeft = Offset(0f, centerY - trackH / 2),
-                size = Size(minX, trackH),
-                cornerRadius = CornerRadius(trackH / 2),
-            )
-        }
-
-        // ロック済み範囲（右）
-        if (maxBoundMs < durationMs) {
-            drawRoundRect(
-                color = lockedColor,
-                topLeft = Offset(maxX, centerY - trackH / 2),
-                size = Size(size.width - maxX, trackH),
-                cornerRadius = CornerRadius(trackH / 2),
-            )
-        }
 
         // 選択範囲（プライマリ色）
         drawRoundRect(
