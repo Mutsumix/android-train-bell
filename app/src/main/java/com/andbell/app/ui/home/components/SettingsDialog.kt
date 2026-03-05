@@ -20,11 +20,9 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRow
@@ -41,7 +39,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import com.andbell.app.BuildConfig
 import com.andbell.app.domain.model.AudioCategory
 import com.andbell.app.domain.model.AudioItem
 
@@ -57,9 +54,6 @@ fun SettingsDialog(
     onRequestRecord: (AudioCategory) -> Unit,
     onRequestAddAudio: (AudioCategory) -> Unit,
     onRequestTrim: (AudioItem) -> Unit,
-    onSimulateConnect: () -> Unit = {},
-    onSimulateDisconnect: () -> Unit = {},
-    onSimulateDsr: (Boolean) -> Unit = {},
 ) {
     if (!isOpen) return
 
@@ -166,40 +160,7 @@ fun SettingsDialog(
                 ) {
                     Text("MP3ファイルを追加")
                 }
-                if (BuildConfig.DEBUG) {
-                    HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
-                    Text(
-                        "デバッグ（DEBUG ビルドのみ）",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.outline,
-                    )
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        modifier = Modifier.fillMaxWidth(),
-                    ) {
-                        OutlinedButton(
-                            onClick = onSimulateConnect,
-                            modifier = Modifier.weight(1f),
-                        ) { Text("接続シミュレート") }
-                        OutlinedButton(
-                            onClick = onSimulateDisconnect,
-                            modifier = Modifier.weight(1f),
-                        ) { Text("切断シミュレート") }
-                    }
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        modifier = Modifier.fillMaxWidth(),
-                    ) {
-                        OutlinedButton(
-                            onClick = { onSimulateDsr(true) },
-                            modifier = Modifier.weight(1f),
-                        ) { Text("ON (DSR High)") }
-                        OutlinedButton(
-                            onClick = { onSimulateDsr(false) },
-                            modifier = Modifier.weight(1f),
-                        ) { Text("OFF (DSR Low)") }
-                    }
-                }
+
             }
         },
         confirmButton = {

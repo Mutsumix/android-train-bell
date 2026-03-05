@@ -27,7 +27,7 @@ class MediaPlayerAudioPlayer(
 
     private var currentCategory: AudioCategory? = null
 
-    override fun play(item: AudioItem) {
+    override fun play(item: AudioItem, skipCue: Boolean) {
         runCatching {
             val isUchigaeshi = currentCategory == AudioCategory.DoorAnnouncement
                 && item.category == AudioCategory.DepartureBell
@@ -36,12 +36,12 @@ class MediaPlayerAudioPlayer(
             if (isUchigaeshi) {
                 // 打ち返し: OFF を止めずに ON を同時再生
                 currentCategory = null  // 次押しはリセット後の通常再生
-                playSwitchCue(item.category)
+                if (!skipCue) playSwitchCue(item.category)
                 startUchigaeshiAudio(item)
             } else {
                 stop()
                 currentCategory = item.category
-                playSwitchCue(item.category)
+                if (!skipCue) playSwitchCue(item.category)
                 schedulePrimaryPlayback(item)
             }
         }.onFailure {

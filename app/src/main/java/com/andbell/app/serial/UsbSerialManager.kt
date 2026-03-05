@@ -219,17 +219,4 @@ class UsbSerialManager(
         }
     }
 
-    // --- デバッグ用（DEBUG ビルドのみ使用） ---
-
-    fun simulateConnect() {
-        _isConnected.value = true
-    }
-
-    fun simulateDisconnect() {
-        disconnect()
-    }
-
-    fun simulateDsr(state: DsrState) {
-        scope.launch { _dsrChanges.emit(state) }
-    }
 }

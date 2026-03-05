@@ -136,9 +136,6 @@ fun HomeScreen(
         onRequestTrim = { item ->
             trimmingItem = item
         },
-        onSimulateConnect = viewModel::onSimulateConnect,
-        onSimulateDisconnect = viewModel::onSimulateDisconnect,
-        onSimulateDsr = viewModel::onSimulateDsr,
     )
 
     trimmingItem?.let { item ->

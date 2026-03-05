@@ -111,8 +111,7 @@ class HomeViewModel(
     private fun observeUsbSerial() {
         viewModelScope.launch {
             usbSerialManager.dsrChanges.collect { state ->
-                // 物理スイッチ経由：isLinkedMode に関わらず再生
-                playAudio(state == DsrState.High)
+                playAudio(state == DsrState.High, skipCue = true)
             }
         }
         usbSerialManager.tryConnect()
@@ -128,7 +127,7 @@ class HomeViewModel(
         playAudio(isOn)
     }
 
-    private fun playAudio(isOn: Boolean) {
+    private fun playAudio(isOn: Boolean, skipCue: Boolean = false) {
         val state = uiState.value
         val target = if (isOn) {
             state.departureBells.firstOrNull { it.id == state.selectedBellId }
@@ -139,16 +138,12 @@ class HomeViewModel(
             viewModelScope.launch { _messages.emit("再生できる音源がありません") }
             return
         }
-        delegatePlayer?.play(target)
+        delegatePlayer?.play(target, skipCue)
     }
 
     fun onLinkedModeTap() {
         viewModelScope.launch { _messages.emit("物理スイッチ連動中です") }
     }
-
-    fun onSimulateConnect() = usbSerialManager.simulateConnect()
-    fun onSimulateDisconnect() = usbSerialManager.simulateDisconnect()
-    fun onSimulateDsr(isHigh: Boolean) = usbSerialManager.simulateDsr(if (isHigh) DsrState.High else DsrState.Low)
 
     fun onSelectBell(id: String) {
         selectedBellId.value = id
