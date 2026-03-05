@@ -1,7 +1,6 @@
 package com.andbell.app
 
 import android.content.Intent
-import android.hardware.usb.UsbDevice
 import android.hardware.usb.UsbManager
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -47,9 +46,7 @@ class MainActivity : ComponentActivity() {
 
     private fun handleUsbIntent(intent: Intent) {
         if (intent.action == UsbManager.ACTION_USB_DEVICE_ATTACHED) {
-            @Suppress("DEPRECATION")
-            val device = intent.getParcelableExtra<UsbDevice>(UsbManager.EXTRA_DEVICE) ?: return
-            viewModel.onUsbDeviceAttached(device)
+            viewModel.onUsbDeviceAttached()
         }
     }
 }

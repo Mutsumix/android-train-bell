@@ -1,7 +1,6 @@
 package com.andbell.app.ui.home
 
 import android.app.Application
-import android.hardware.usb.UsbDevice
 import android.net.Uri
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
@@ -112,17 +111,24 @@ class HomeViewModel(
     private fun observeUsbSerial() {
         viewModelScope.launch {
             usbSerialManager.dsrChanges.collect { state ->
-                onSwitchPressed(state == DsrState.High)
+                // 物理スイッチ経由：isLinkedMode に関わらず再生
+                playAudio(state == DsrState.High)
             }
         }
         usbSerialManager.tryConnect()
     }
 
-    fun onUsbDeviceAttached(device: UsbDevice) {
-        usbSerialManager.onDeviceAttached(device)
+    fun onUsbDeviceAttached() {
+        usbSerialManager.onDeviceAttached()
     }
 
+    /** 画面上のボタン操作。USB連動中は無視する。 */
     fun onSwitchPressed(isOn: Boolean) {
+        if (usbSerialManager.isConnected.value) return
+        playAudio(isOn)
+    }
+
+    private fun playAudio(isOn: Boolean) {
         val state = uiState.value
         val target = if (isOn) {
             state.departureBells.firstOrNull { it.id == state.selectedBellId }
@@ -139,6 +145,10 @@ class HomeViewModel(
     fun onLinkedModeTap() {
         viewModelScope.launch { _messages.emit("物理スイッチ連動中です") }
     }
+
+    fun onSimulateConnect() = usbSerialManager.simulateConnect()
+    fun onSimulateDisconnect() = usbSerialManager.simulateDisconnect()
+    fun onSimulateDsr(isHigh: Boolean) = usbSerialManager.simulateDsr(if (isHigh) DsrState.High else DsrState.Low)
 
     fun onSelectBell(id: String) {
         selectedBellId.value = id
