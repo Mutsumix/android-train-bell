@@ -72,7 +72,7 @@ fun HomeScreen(
         snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
-                title = { Text("発車ベルスイッチ") },
+                title = { Text("どこでも発車メロディ") },
                 actions = {
                     IconButton(onClick = viewModel::onOpenSettings) {
                         Icon(Icons.Default.Settings, contentDescription = "設定")
