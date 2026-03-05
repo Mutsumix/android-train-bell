@@ -1,6 +1,7 @@
 package com.andbell.app.ui.home
 
 import android.app.Application
+import android.hardware.usb.UsbDevice
 import android.net.Uri
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
@@ -13,6 +14,8 @@ import com.andbell.app.domain.model.AudioItem
 import com.andbell.app.domain.model.AudioSourceType
 import com.andbell.app.player.AudioPlayer
 import com.andbell.app.player.MediaPlayerAudioPlayer
+import com.andbell.app.serial.DsrState
+import com.andbell.app.serial.UsbSerialManager
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -29,6 +32,8 @@ data class HomeUiState(
     val selectedBellId: String? = null,
     val selectedDoorId: String? = null,
     val isSettingsOpen: Boolean = false,
+    val isUsbConnected: Boolean = false,
+    val isLinkedMode: Boolean = false,
 )
 
 class HomeViewModel(
@@ -40,22 +45,25 @@ class HomeViewModel(
     private val selectedBellId = MutableStateFlow<String?>(null)
     private val selectedDoorId = MutableStateFlow<String?>(null)
     private val _messages = MutableSharedFlow<String>()
-
     val messages = _messages.asSharedFlow()
+
+    private val usbSerialManager = UsbSerialManager(application, viewModelScope)
 
     val uiState: StateFlow<HomeUiState> = combine(
         repository.departureBells,
         repository.doorAnnouncements,
         selectedBellId,
         selectedDoorId,
-        settingsOpen,
-    ) { bells, doors, bellId, doorId, isOpen ->
+        combine(settingsOpen, usbSerialManager.isConnected) { open, usb -> Pair(open, usb) },
+    ) { bells, doors, bellId, doorId, (isOpen, isConnected) ->
         HomeUiState(
             departureBells = bells,
             doorAnnouncements = doors,
             selectedBellId = bellId ?: bells.firstOrNull()?.id,
             selectedDoorId = doorId ?: doors.firstOrNull()?.id,
             isSettingsOpen = isOpen,
+            isUsbConnected = isConnected,
+            isLinkedMode = isConnected,
         )
     }.stateIn(
         scope = viewModelScope,
@@ -73,6 +81,7 @@ class HomeViewModel(
         }
         setPlayer(audioPlayer)
         loadInitialState()
+        observeUsbSerial()
     }
 
     private fun setPlayer(newPlayer: AudioPlayer) {
@@ -100,6 +109,19 @@ class HomeViewModel(
         }
     }
 
+    private fun observeUsbSerial() {
+        viewModelScope.launch {
+            usbSerialManager.dsrChanges.collect { state ->
+                onSwitchPressed(state == DsrState.High)
+            }
+        }
+        usbSerialManager.tryConnect()
+    }
+
+    fun onUsbDeviceAttached(device: UsbDevice) {
+        usbSerialManager.onDeviceAttached(device)
+    }
+
     fun onSwitchPressed(isOn: Boolean) {
         val state = uiState.value
         val target = if (isOn) {
@@ -112,6 +134,10 @@ class HomeViewModel(
             return
         }
         delegatePlayer?.play(target)
+    }
+
+    fun onLinkedModeTap() {
+        viewModelScope.launch { _messages.emit("物理スイッチ連動中です") }
     }
 
     fun onSelectBell(id: String) {
@@ -203,5 +229,6 @@ class HomeViewModel(
     override fun onCleared() {
         super.onCleared()
         delegatePlayer?.release()
+        usbSerialManager.release()
     }
 }

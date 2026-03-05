@@ -36,6 +36,7 @@ import androidx.compose.ui.unit.dp
 import com.andbell.app.domain.model.AudioCategory
 import com.andbell.app.domain.model.AudioItem
 import com.andbell.app.ui.home.components.AudioSelector
+import com.andbell.app.ui.home.components.ConnectionIndicator
 import com.andbell.app.ui.home.components.RecordingDialog
 import com.andbell.app.ui.home.components.SettingsDialog
 import com.andbell.app.ui.home.components.SwitchButton
@@ -74,6 +75,9 @@ fun HomeScreen(
             TopAppBar(
                 title = { Text("どこでも発車メロディ") },
                 actions = {
+                    if (uiState.isUsbConnected) {
+                        ConnectionIndicator()
+                    }
                     IconButton(onClick = viewModel::onOpenSettings) {
                         Icon(Icons.Default.Settings, contentDescription = "設定")
                     }
@@ -91,6 +95,8 @@ fun HomeScreen(
         ) {
             SwitchButton(
                 onPress = viewModel::onSwitchPressed,
+                isLinkedMode = uiState.isLinkedMode,
+                onLinkedModeTap = viewModel::onLinkedModeTap,
                 modifier = Modifier.fillMaxWidth(),
             )
             Spacer(modifier = Modifier.height(16.dp))

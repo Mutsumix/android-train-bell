@@ -29,6 +29,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
@@ -39,6 +40,8 @@ import kotlinx.coroutines.delay
 @Composable
 fun SwitchButton(
     onPress: (Boolean) -> Unit,
+    isLinkedMode: Boolean = false,
+    onLinkedModeTap: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     var pressedButton by remember { mutableStateOf<String?>(null) }
@@ -64,11 +67,13 @@ fun SwitchButton(
             .height(380.dp),
         contentAlignment = Alignment.Center
     ) {
+        val alpha = if (isLinkedMode) 0.5f else 1f
         // 筐体本体
         Surface(
             modifier = Modifier
                 .width(260.dp)
-                .height(360.dp),
+                .height(360.dp)
+                .graphicsLayer { this.alpha = alpha },
             shape = RoundedCornerShape(28.dp),
             color = housingColor,
             shadowElevation = 16.dp,
@@ -129,8 +134,12 @@ fun SwitchButton(
                             pressedColor = onButtonPressedColor,
                             isPressed = pressedButton == "on",
                             onClick = {
-                                pressedButton = "on"
-                                onPress(true)
+                                if (isLinkedMode) {
+                                    onLinkedModeTap()
+                                } else {
+                                    pressedButton = "on"
+                                    onPress(true)
+                                }
                             }
                         )
 
@@ -141,8 +150,12 @@ fun SwitchButton(
                             pressedColor = offButtonPressedColor,
                             isPressed = pressedButton == "off",
                             onClick = {
-                                pressedButton = "off"
-                                onPress(false)
+                                if (isLinkedMode) {
+                                    onLinkedModeTap()
+                                } else {
+                                    pressedButton = "off"
+                                    onPress(false)
+                                }
                             }
                         )
                     }
