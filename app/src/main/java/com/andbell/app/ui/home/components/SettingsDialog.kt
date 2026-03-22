@@ -3,23 +3,24 @@ package com.andbell.app.ui.home.components
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.DragHandle
 import androidx.compose.material.icons.filled.Mic
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -41,6 +42,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.andbell.app.domain.model.AudioCategory
 import com.andbell.app.domain.model.AudioItem
+import sh.calvin.reorderable.ReorderableItem
+import sh.calvin.reorderable.rememberReorderableLazyListState
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -54,6 +57,7 @@ fun SettingsDialog(
     onRequestRecord: (AudioCategory) -> Unit,
     onRequestAddAudio: (AudioCategory) -> Unit,
     onRequestTrim: (AudioItem) -> Unit,
+    onMoveAudio: (fromIndex: Int, toIndex: Int, category: AudioCategory) -> Unit = { _, _, _ -> },
 ) {
     if (!isOpen) return
 
@@ -65,6 +69,11 @@ fun SettingsDialog(
     var renamingItem by remember { mutableStateOf<AudioItem?>(null) }
     var renameInput by remember { mutableStateOf("") }
     var contextMenuItem by remember { mutableStateOf<AudioItem?>(null) }
+
+    val lazyListState = rememberLazyListState()
+    val reorderableLazyListState = rememberReorderableLazyListState(lazyListState) { from, to ->
+        onMoveAudio(from.index, to.index, currentCategory)
+    }
 
     AlertDialog(
         onDismissRequest = onClose,
@@ -84,64 +93,81 @@ fun SettingsDialog(
                     )
                 }
                 LazyColumn(
+                    state = lazyListState,
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                     modifier = Modifier
                         .fillMaxWidth()
                         .heightIn(max = 400.dp),
                 ) {
-                    items(currentItems, key = { it.id }) { item ->
-                        androidx.compose.foundation.layout.Box {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(horizontal = 4.dp),
-                            ) {
-                                Text(
-                                    text = item.name,
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
+                    itemsIndexed(currentItems, key = { _, item -> item.id }) { _, item ->
+                        ReorderableItem(reorderableLazyListState, key = item.id) { isDragging ->
+                            Box {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
                                     modifier = Modifier
-                                        .weight(1f)
-                                        .combinedClickable(
-                                            onClick = {},
-                                            onLongClick = if (item.isCustom) {
-                                                { contextMenuItem = item }
-                                            } else {
-                                                null
-                                            },
-                                        ),
-                                )
-                                if (item.isCustom) {
-                                    IconButton(onClick = { onDeleteAudio(item.id, item.category) }) {
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 4.dp),
+                                ) {
+                                    IconButton(
+                                        onClick = {},
+                                        modifier = Modifier.longPressDraggableHandle(),
+                                    ) {
                                         Icon(
-                                            imageVector = Icons.Filled.Delete,
-                                            contentDescription = "削除",
+                                            imageVector = Icons.Filled.DragHandle,
+                                            contentDescription = "並び替え",
+                                            tint = if (isDragging) {
+                                                MaterialTheme.colorScheme.primary
+                                            } else {
+                                                MaterialTheme.colorScheme.onSurfaceVariant
+                                            },
                                         )
                                     }
+                                    Text(
+                                        text = item.name,
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .combinedClickable(
+                                                onClick = {},
+                                                onLongClick = if (item.isCustom) {
+                                                    { contextMenuItem = item }
+                                                } else {
+                                                    null
+                                                },
+                                            ),
+                                    )
+                                    if (item.isCustom) {
+                                        IconButton(onClick = { onDeleteAudio(item.id, item.category) }) {
+                                            Icon(
+                                                imageVector = Icons.Filled.Delete,
+                                                contentDescription = "削除",
+                                            )
+                                        }
+                                    }
                                 }
-                            }
-                            // 長押しで表示するコンテキストメニュー
-                            DropdownMenu(
-                                expanded = contextMenuItem?.id == item.id,
-                                onDismissRequest = { contextMenuItem = null },
-                            ) {
-                                DropdownMenuItem(
-                                    text = { Text("名前を変更") },
-                                    onClick = {
-                                        renamingItem = item
-                                        renameInput = item.name
-                                        contextMenuItem = null
-                                    },
-                                )
-                                DropdownMenuItem(
-                                    text = { Text("トリミング編集") },
-                                    onClick = {
-                                        onRequestTrim(item)
-                                        contextMenuItem = null
-                                    },
-                                )
+                                // 長押しで表示するコンテキストメニュー（カスタムアイテムのみ）
+                                DropdownMenu(
+                                    expanded = contextMenuItem?.id == item.id,
+                                    onDismissRequest = { contextMenuItem = null },
+                                ) {
+                                    DropdownMenuItem(
+                                        text = { Text("名前を変更") },
+                                        onClick = {
+                                            renamingItem = item
+                                            renameInput = item.name
+                                            contextMenuItem = null
+                                        },
+                                    )
+                                    DropdownMenuItem(
+                                        text = { Text("トリミング編集") },
+                                        onClick = {
+                                            onRequestTrim(item)
+                                            contextMenuItem = null
+                                        },
+                                    )
+                                }
                             }
                         }
                     }
@@ -160,7 +186,6 @@ fun SettingsDialog(
                 ) {
                     Text("MP3ファイルを追加")
                 }
-
             }
         },
         confirmButton = {

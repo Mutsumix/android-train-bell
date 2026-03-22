@@ -95,6 +95,7 @@ dependencies {
     implementation("androidx.compose.material:material-icons-extended")
 
     implementation("com.github.mik3y:usb-serial-for-android:3.7.3")
+    implementation("sh.calvin.reorderable:reorderable:2.4.3")
 
     debugImplementation("androidx.compose.ui:ui-tooling")
     debugImplementation("androidx.compose.ui:ui-test-manifest")

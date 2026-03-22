@@ -209,6 +209,13 @@ class HomeViewModel(
         }
     }
 
+    fun onMoveAudio(fromIndex: Int, toIndex: Int, category: AudioCategory) {
+        viewModelScope.launch {
+            repository.moveAudio(fromIndex, toIndex, category)
+            persistUserItems()
+        }
+    }
+
     fun onDeleteAudio(id: String, category: AudioCategory) {
         viewModelScope.launch {
             repository.removeAudio(id, category)

@@ -58,4 +58,15 @@ class InMemoryAudioRepository : AudioRepository {
             }
         }
     }
+
+    override suspend fun moveAudio(fromIndex: Int, toIndex: Int, category: AudioCategory) {
+        fun List<AudioItem>.moved(from: Int, to: Int): List<AudioItem> {
+            if (from !in indices || to !in indices) return this
+            return toMutableList().apply { add(to, removeAt(from)) }
+        }
+        when (category) {
+            AudioCategory.DepartureBell -> _departureBells.value = _departureBells.value.moved(fromIndex, toIndex)
+            AudioCategory.DoorAnnouncement -> _doorAnnouncements.value = _doorAnnouncements.value.moved(fromIndex, toIndex)
+        }
+    }
 }

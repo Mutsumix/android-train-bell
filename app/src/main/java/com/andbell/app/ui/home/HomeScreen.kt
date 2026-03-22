@@ -137,6 +137,7 @@ fun HomeScreen(
         onRequestTrim = { item ->
             trimmingItem = item
         },
+        onMoveAudio = { from, to, cat -> viewModel.onMoveAudio(from, to, cat) },
     )
 
     trimmingItem?.let { item ->
