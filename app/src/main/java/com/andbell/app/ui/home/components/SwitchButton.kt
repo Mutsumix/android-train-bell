@@ -20,11 +20,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -35,17 +31,15 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import kotlinx.coroutines.delay
 
 @Composable
 fun SwitchButton(
     onPress: (Boolean) -> Unit,
+    onLatched: Boolean,
     isLinkedMode: Boolean = false,
     onLinkedModeTap: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
-    var pressedButton by remember { mutableStateOf<String?>(null) }
-
     // 筐体の色（ベージュ/グレー）
     val housingColor = Color(0xFFD4CFC4)
     val housingDarkColor = Color(0xFFB8B3A8)
@@ -132,12 +126,11 @@ fun SwitchButton(
                             text = "ON",
                             baseColor = onButtonColor,
                             pressedColor = onButtonPressedColor,
-                            isPressed = pressedButton == "on",
+                            isPressed = onLatched,
                             onClick = {
                                 if (isLinkedMode) {
                                     onLinkedModeTap()
                                 } else {
-                                    pressedButton = "on"
                                     onPress(true)
                                 }
                             }
@@ -148,12 +141,11 @@ fun SwitchButton(
                             text = "OFF",
                             baseColor = offButtonColor,
                             pressedColor = offButtonPressedColor,
-                            isPressed = pressedButton == "off",
+                            isPressed = false,
                             onClick = {
                                 if (isLinkedMode) {
                                     onLinkedModeTap()
                                 } else {
-                                    pressedButton = "off"
                                     onPress(false)
                                 }
                             }
@@ -167,14 +159,6 @@ fun SwitchButton(
                 MountingScrew(modifier = Modifier.align(Alignment.BottomStart).offset((-8).dp, 8.dp))
                 MountingScrew(modifier = Modifier.align(Alignment.BottomEnd).offset(8.dp, 8.dp))
             }
-        }
-    }
-
-    // ボタン押下状態をリセット
-    LaunchedEffect(pressedButton) {
-        if (pressedButton != null) {
-            delay(300)
-            pressedButton = null
         }
     }
 }
@@ -198,7 +182,7 @@ private fun IndustrialButton(
             .height(80.dp)
             .offset(y = offsetY)
             .shadow(
-                elevation = if (isPressed) 4.dp else 12.dp,
+                elevation = if (isPressed) 4.dp else 18.dp,
                 shape = RoundedCornerShape(8.dp)
             )
             .clickable(onClick = onClick),

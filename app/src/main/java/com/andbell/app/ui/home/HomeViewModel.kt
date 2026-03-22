@@ -30,6 +30,7 @@ data class HomeUiState(
     val doorAnnouncements: List<AudioItem> = emptyList(),
     val selectedBellId: String? = null,
     val selectedDoorId: String? = null,
+    val onLatched: Boolean = false,
     val isSettingsOpen: Boolean = false,
     val isUsbConnected: Boolean = false,
     val isLinkedMode: Boolean = false,
@@ -43,23 +44,31 @@ class HomeViewModel(
     private val settingsOpen = MutableStateFlow(false)
     private val selectedBellId = MutableStateFlow<String?>(null)
     private val selectedDoorId = MutableStateFlow<String?>(null)
+    private val onLatched = MutableStateFlow(false)
     private val _messages = MutableSharedFlow<String>()
     val messages = _messages.asSharedFlow()
 
     private val usbSerialManager = UsbSerialManager(application, viewModelScope)
+    private val selectedIds = combine(selectedBellId, selectedDoorId) { bellId, doorId ->
+        bellId to doorId
+    }
+    private val uiFlags = combine(settingsOpen, usbSerialManager.isConnected) { open, usb ->
+        open to usb
+    }
 
     val uiState: StateFlow<HomeUiState> = combine(
         repository.departureBells,
         repository.doorAnnouncements,
-        selectedBellId,
-        selectedDoorId,
-        combine(settingsOpen, usbSerialManager.isConnected) { open, usb -> Pair(open, usb) },
-    ) { bells, doors, bellId, doorId, (isOpen, isConnected) ->
+        selectedIds,
+        onLatched,
+        uiFlags,
+    ) { bells, doors, (bellId, doorId), latched, (isOpen, isConnected) ->
         HomeUiState(
             departureBells = bells,
             doorAnnouncements = doors,
             selectedBellId = bellId ?: bells.firstOrNull()?.id,
             selectedDoorId = doorId ?: doors.firstOrNull()?.id,
+            onLatched = latched,
             isSettingsOpen = isOpen,
             isUsbConnected = isConnected,
             isLinkedMode = isConnected,
@@ -111,7 +120,7 @@ class HomeViewModel(
     private fun observeUsbSerial() {
         viewModelScope.launch {
             usbSerialManager.dsrChanges.collect { state ->
-                playAudio(state == DsrState.High, skipCue = true)
+                handleSwitchInput(state == DsrState.High, skipCue = true)
             }
         }
         usbSerialManager.tryConnect()
@@ -124,7 +133,12 @@ class HomeViewModel(
     /** 画面上のボタン操作。USB連動中は無視する。 */
     fun onSwitchPressed(isOn: Boolean) {
         if (usbSerialManager.isConnected.value) return
-        playAudio(isOn)
+        handleSwitchInput(isOn)
+    }
+
+    private fun handleSwitchInput(isOn: Boolean, skipCue: Boolean = false) {
+        onLatched.value = isOn
+        playAudio(isOn, skipCue)
     }
 
     private fun playAudio(isOn: Boolean, skipCue: Boolean = false) {

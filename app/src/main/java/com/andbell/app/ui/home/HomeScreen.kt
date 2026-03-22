@@ -95,6 +95,7 @@ fun HomeScreen(
         ) {
             SwitchButton(
                 onPress = viewModel::onSwitchPressed,
+                onLatched = uiState.onLatched,
                 isLinkedMode = uiState.isLinkedMode,
                 onLinkedModeTap = viewModel::onLinkedModeTap,
                 modifier = Modifier.fillMaxWidth(),
